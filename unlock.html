@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unlock Link - Complete Actions</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #0f172a; color: #f8fafc; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
+        
+        .card-unlock { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 30px; width: 100%; max-width: 420px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .card-unlock h2 { font-size: 22px; margin-bottom: 8px; color: #fff; }
+        .card-unlock p { font-size: 13px; color: #94a3b8; margin-bottom: 20px; }
+
+        .btn-action { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 14px 18px; margin-bottom: 12px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; color: white; transition: 0.3s; text-decoration: none; }
+        
+        .btn-red { background: #dc2626; }
+        .btn-blue { background: #2563eb; }
+        .btn-pink { background: #d946ef; }
+        .btn-sky { background: #0284c7; }
+        .btn-green { background: #22c55e; }
+        .btn-done { background: #16a34a !important; cursor: default; }
+
+        .progress-box { margin: 20px 0; background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #334155; font-size: 12px; color: #cbd5e1; }
+
+        .btn-target { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 14px 18px; border: 1px solid #475569; border-radius: 10px; font-size: 14px; font-weight: 600; background: #334155; color: #94a3b8; cursor: not-allowed; text-decoration: none; transition: 0.3s; }
+        .btn-target.active { background: #16a34a; color: white; border-color: #16a34a; cursor: pointer; }
+    </style>
+
+    <!-- ============================================================ -->
+    <!-- TEMPEL SKRIP IKLAN MONETAG (POPUNDER/PUSH) DI SINI JIKA ADA   -->
+    <!-- ============================================================ -->
+</head>
+<body>
+
+    <div class="card-unlock">
+        <h2>Unlock Link</h2>
+        <p>Complete the actions below to unlock the destination link.</p>
+
+        <div id="actions-container"></div>
+
+        <div class="progress-box" id="progressText">
+            Unlock progress: 🔒 (0/0)
+        </div>
+
+        <a id="btnTarget" class="btn-target" href="#" onclick="openTarget(event)">
+            <span><i class="fas fa-lock" id="lockIcon" style="margin-right: 8px;"></i> Unlock Link</span>
+            <i class="fas fa-link"></i>
+        </a>
+    </div>
+
+    <script>
+        const actionsConfig = {
+            s: { key: 'sub', label: 'Subscribe On YouTube', icon: 'fab fa-youtube', class: 'btn-red' },
+            l: { key: 'like', label: 'Like & Comment Video', icon: 'fas fa-thumbs-up', class: 'btn-blue' },
+            i: { key: 'ig', label: 'Follow On Instagram', icon: 'fab fa-instagram', class: 'btn-pink' },
+            g: { key: 'tg', label: 'Join On Telegram', icon: 'fab fa-telegram', class: 'btn-sky' },
+            w: { key: 'wa', label: 'Join / Chat On WhatsApp', icon: 'fab fa-whatsapp', class: 'btn-green' }
+        };
+
+        let targetUrl = '#';
+        let activeActions = [];
+        let completedCount = 0;
+        const container = document.getElementById('actions-container');
+
+        function validHttpUrl(value) {
+            try {
+                const url = new URL(value);
+                return url.protocol === 'https:' || url.protocol === 'http:';
+            } catch {
+                return false;
+            }
+        }
+
+        async function loadLink() {
+            const id = window.location.search
+                ? new URLSearchParams(window.location.search).get('id')
+                : null;
+
+            if (!id || !/^[a-zA-Z0-9_-]{6,20}$/.test(id)) {
+                showError('Link tidak valid atau ID link tidak ditemukan.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/link/' + encodeURIComponent(id));
+                const result = await response.json().catch(() => ({}));
+
+                if (!response.ok || !result.payload) {
+                    throw new Error(result.error || 'Link tidak ditemukan atau sudah tidak tersedia.');
+                }
+
+                const data = result.payload;
+                if (!validHttpUrl(data.t)) {
+                    throw new Error('Link tujuan tidak valid.');
+                }
+
+                targetUrl = data.t;
+                ['s', 'l', 'i', 'g', 'w'].forEach((key) => {
+                    if (data[key] && validHttpUrl(data[key])) {
+                        activeActions.push({
+                            key: actionsConfig[key].key,
+                            url: data[key],
+                            completed: false
+                        });
+                    }
+                });
+
+                renderActions();
+                updateProgress();
+            } catch (error) {
+                showError(error.message || 'Gagal memuat link. Periksa koneksi internet.');
+            }
+        }
+
+        function showError(message) {
+            container.textContent = message;
+            document.getElementById('progressText').textContent = 'Link tidak dapat dimuat.';
+            const target = document.getElementById('btnTarget');
+            target.classList.remove('active');
+            target.setAttribute('aria-disabled', 'true');
+        }
+
+        function renderActions() {
+            container.innerHTML = '';
+            activeActions.forEach((action) => {
+                const config = Object.values(actionsConfig).find(c => c.key === action.key);
+                const btn = document.createElement('button');
+                btn.id = 'btn-' + action.key;
+                btn.className = 'btn-action ' + config.class;
+
+                const label = document.createElement('span');
+                const icon = document.createElement('i');
+                icon.className = config.icon;
+                icon.style.marginRight = '8px';
+                label.appendChild(icon);
+                label.appendChild(document.createTextNode(' ' + config.label));
+
+                const arrow = document.createElement('i');
+                arrow.className = 'fas fa-chevron-right';
+                btn.append(label, arrow);
+                btn.addEventListener('click', () => doAction(action.key, action.url));
+                container.appendChild(btn);
+            });
+
+            if (activeActions.length === 0) {
+                const p = document.createElement('p');
+                p.textContent = 'Tidak ada langkah verifikasi yang diperlukan.';
+                container.appendChild(p);
+            }
+        }
+
+        function doAction(key, url) {
+            const opened = window.open(url, '_blank', 'noopener,noreferrer');
+            const actionObj = activeActions.find(a => a.key === key);
+
+            // This records a button click, not proof of an actual subscription/follow.
+            if (actionObj && !actionObj.completed) {
+                actionObj.completed = true;
+                completedCount++;
+
+                const btn = document.getElementById('btn-' + key);
+                if (btn) {
+                    btn.textContent = '✓ Completed';
+                    btn.classList.add('btn-done');
+                    btn.disabled = true;
+                }
+                updateProgress();
+            }
+        }
+
+        function updateProgress() {
+            const total = activeActions.length;
+            document.getElementById('progressText').innerText =
+                'Unlock progress: ' + (completedCount === total ? '🔓' : '🔒') +
+                ' (' + completedCount + '/' + total + ')';
+
+            if (completedCount === total) {
+                const btnTarget = document.getElementById('btnTarget');
+                btnTarget.classList.add('active');
+                btnTarget.setAttribute('aria-disabled', 'false');
+                document.getElementById('lockIcon').className = 'fas fa-lock-open';
+            }
+        }
+
+        function openTarget(e) {
+            if (completedCount < activeActions.length || !validHttpUrl(targetUrl)) {
+                e.preventDefault();
+                alert('Harap selesaikan semua langkah di atas terlebih dahulu!');
+                return;
+            }
+            e.preventDefault();
+            window.location.href = targetUrl;
+        }
+
+        loadLink();
+    </script>
+</body>
+</html>
